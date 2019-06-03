@@ -1,0 +1,114 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:tracking="http://www.mulesoft.org/schema/mule/ee/tracking" xmlns:validation="http://www.mulesoft.org/schema/mule/validation"
+	xmlns:dw="http://www.mulesoft.org/schema/mule/ee/dw" xmlns:json="http://www.mulesoft.org/schema/mule/json"
+	xmlns:jms="http://www.mulesoft.org/schema/mule/jms" xmlns="http://www.mulesoft.org/schema/mule/core"
+	xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+	xmlns:spring="http://www.springframework.org/schema/beans" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans-current.xsd
+http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/jms http://www.mulesoft.org/schema/mule/jms/current/mule-jms.xsd
+http://www.mulesoft.org/schema/mule/ee/dw http://www.mulesoft.org/schema/mule/ee/dw/current/dw.xsd
+http://www.mulesoft.org/schema/mule/json http://www.mulesoft.org/schema/mule/json/current/mule-json.xsd
+http://www.mulesoft.org/schema/mule/validation http://www.mulesoft.org/schema/mule/validation/current/mule-validation.xsd
+http://www.mulesoft.org/schema/mule/ee/tracking http://www.mulesoft.org/schema/mule/ee/tracking/current/mule-tracking-ee.xsd">
+	<jms:activemq-connector name="Active_MQ"
+		username="admin" password="admin" brokerURL="tcp://localhost:61616"
+		validateConnections="true" doc:name="Active MQ" />
+
+	<flow name="poc3Flow">
+		<jms:inbound-endpoint queue="CTO_Mule"
+			connector-ref="Active_MQ" doc:name="JMS" />
+        <set-payload value="#[message.payloadAs(java.lang.String)]" mimeType="application/xml" doc:name="Set Payload"/>
+        <choice doc:name="Choice">
+            <when expression="#[dw('payload.message.Data.txn.sourcesystemcode') == 'CTO']">
+                <dw:transform-message doc:name="Transform Message">
+                    <dw:set-payload><![CDATA[%dw 1.0
+%output application/xml
+---
+{
+	message: {
+		Id:payload.message.Id,
+		Type:payload.message.Type,
+		Sequence:payload.message.Sequence,
+		Data: {
+			txn: {
+				PaymentChannelCode:'BOL' ++ payload.message.Data.txn.PaymentChannelCode when payload.message.Data.txn.PaymentChannelCode == '001' otherwise 'OIN' ++ payload.message.Data.txn.PaymentChannelCode when payload.message.Data.txn.PaymentChannelCode == '012' otherwise payload.message.Data.txn.PaymentChannelCode,
+				sourcesystemcode: payload.message.Data.txn.sourcesystemcode
+			}
+		}
+		
+	}
+}]]></dw:set-payload>
+                </dw:transform-message>
+                <byte-array-to-string-transformer doc:name="Byte Array to String"/>
+                <jms:outbound-endpoint queue="Mule_Netreveal" connector-ref="Active_MQ" doc:name="JMS"/>
+                <set-payload value="1" doc:name="Set Payload"/>
+            </when>
+            <otherwise>
+                <jms:outbound-endpoint queue="Backout" connector-ref="Active_MQ" doc:name="JMS"/>
+                <set-payload value="Sent to Backout Queue" doc:name="Set Payload"/>
+                <logger message="#[payload]" level="INFO" doc:name="Logger"/>
+            </otherwise>
+        </choice>
+		<choice-exception-strategy doc:name="Choice Exception Strategy">
+			<catch-exception-strategy doc:name="Catch Exception Strategy" when="#[exception.causeMatches('Exception')]">
+				<set-payload value="A Problem Has Occured ! Hang In There..." doc:name="Set Payload" />
+				<logger message="#[payload]" level="INFO" doc:name="Logger" />
+			</catch-exception-strategy>
+		</choice-exception-strategy>
+	</flow>
+    <flow name="ImmediateResponseFlow">
+        <jms:inbound-endpoint queue="Netreveal_Mule" connector-ref="Active_MQ" doc:name="JMS"/>
+        <set-payload value="#[message.payloadAs(java.lang.String)]" mimeType="application/xml" doc:name="Set Payload"/>
+        <choice doc:name="Choice">
+            <when expression="#[dw('payload.Result.res') == 'PASS']">
+                <dw:transform-message doc:name="Transform Message">
+                    <dw:set-payload><![CDATA[%dw 1.0
+%output application/xml
+---
+{
+	Result: {
+		res: payload.Result.res
+	}
+}]]></dw:set-payload>
+                </dw:transform-message>
+            </when>
+            <when expression="#[dw('payload.Result.res') == 'FAIL']">
+                <dw:transform-message doc:name="Transform Message">
+                    <dw:set-payload><![CDATA[%dw 1.0
+%output application/xml
+---
+{
+	Result: {
+		res: payload.Result.res
+	}
+}]]></dw:set-payload>
+                </dw:transform-message>
+            </when>
+            <otherwise>
+                <dw:transform-message doc:name="Transform Message">
+                    <dw:set-payload><![CDATA[%dw 1.0
+%output application/xml
+---
+{
+	Result: {
+		res: 'In Workflow'
+	}
+}]]></dw:set-payload>
+                </dw:transform-message>
+            </otherwise>
+        </choice>
+        <byte-array-to-string-transformer doc:name="Byte Array to String"/>
+        <logger message="#[payload]" level="INFO" doc:name="Logger"/>
+        <jms:outbound-endpoint queue="Mule_CTO" connector-ref="Active_MQ" doc:name="JMS"/>
+        <set-payload value="1" doc:name="Set Payload"/>
+            		<choice-exception-strategy doc:name="Choice Exception Strategy">
+			<catch-exception-strategy doc:name="Catch Exception Strategy" when="#[exception.causeMatches('Exception')]">
+				<set-payload value="A Problem Has Occured ! Hang In There..." doc:name="Set Payload" />
+				<logger message="#[payload]" level="INFO" doc:name="Logger" />
+			</catch-exception-strategy>
+		</choice-exception-strategy>
+    </flow>
+
+</mule>

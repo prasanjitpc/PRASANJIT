@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:munit="http://www.mulesoft.org/schema/mule/munit" xmlns:spring="http://www.springframework.org/schema/beans" xmlns:core="http://www.mulesoft.org/schema/mule/core" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/munit http://www.mulesoft.org/schema/mule/munit/current/mule-munit.xsd
+http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans-current.xsd
+http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd">
+    <munit:config name="munit" doc:name="MUnit configuration"/>
+    <spring:beans>
+        <spring:import resource="classpath:poc3.xml"/>
+    </spring:beans>
+    <munit:test name="poc3-test-suite-poc3FlowTest" description="Test" ignore="true">
+        <munit:set-null-payload doc:name="Set Null Payload"/>
+        <flow-ref name="poc3Flow" doc:name="Flow-ref to poc3Flow"/>
+        <munit:assert-true message="Test Failed" condition="#[payload == 'A Problem Has Occured ! Hang In There...']" doc:name="Assert True"/>
+    </munit:test>
+    <munit:test name="poc3-test-suite-ImmediateResponseFlowTest" description="Test" ignore="true">
+        <munit:set-null-payload doc:name="Set Null Payload"/>
+        <flow-ref name="poc3Flow" doc:name="Flow-ref to poc3Flow"/>
+        <munit:assert-true message="Test Failed" condition="#[payload == 'A Problem Has Occured ! Hang In There...']" doc:name="Assert True"/>
+    </munit:test>
+</mule>
