@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:munit="http://www.mulesoft.org/schema/mule/munit" xmlns:spring="http://www.springframework.org/schema/beans" xmlns:core="http://www.mulesoft.org/schema/mule/core" xmlns:mock="http://www.mulesoft.org/schema/mule/mock" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/munit http://www.mulesoft.org/schema/mule/munit/current/mule-munit.xsd
+http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans-current.xsd
+http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/mock http://www.mulesoft.org/schema/mule/mock/current/mule-mock.xsd">
+    <munit:config name="munit" doc:name="MUnit configuration"/>
+    <spring:beans>
+        <spring:import resource="classpath:new.xml"/>
+    </spring:beans>
+    <munit:test name="new-test-suite-newFlowTest" description="Test" ignore="true">
+        <flow-ref name="newFlow" doc:name="Flow-ref to newFlow"/>
+        <munit:assert-on-equals message="Test Failed!" expectedValue="End Of Day File Is Empty!" actualValue="#[payload]" doc:name="Assert Equals"/>
+    </munit:test>
+    <munit:test name="new-test-suite-newFlowTest1" description="Test">
+        <mock:when  doc:name="Mock" messageProcessor="#['Set Payload']">
+        </mock:when>
+        <set-payload value="20190524" doc:name="Set Payload"/>
+        <flow-ref name="newFlow" doc:name="Flow-ref to newFlow"/>
+        <munit:assert-on-equals message="Test Failed!" expectedValue="***** FILES NOT PRESENT! *****" actualValue="#[payload]" doc:name="Assert Equals"/>
+    </munit:test>
+    <munit:test name="new-test-suite-newFlowTest2" description="Test" ignore="true">
+        <set-payload value="20190524" doc:name="Set Payload"/>
+        <flow-ref name="newFlow" doc:name="Flow-ref to newFlow"/>
+        <munit:assert-on-equals message="Test Failed!" expectedValue="***** FILES NOT PRESENT! *****" actualValue="#[payload]" doc:name="Assert Equals"/>
+    </munit:test>
+</mule>
