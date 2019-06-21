@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:munit="http://www.mulesoft.org/schema/mule/munit" xmlns:spring="http://www.springframework.org/schema/beans" xmlns:core="http://www.mulesoft.org/schema/mule/core" xmlns:mock="http://www.mulesoft.org/schema/mule/mock" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/munit http://www.mulesoft.org/schema/mule/munit/current/mule-munit.xsd
+http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans-current.xsd
+http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/mock http://www.mulesoft.org/schema/mule/mock/current/mule-mock.xsd">
+    <munit:config name="munit" doc:name="MUnit configuration"/>
+    <spring:beans>
+        <spring:import resource="classpath:poc4.xml"/>
+    </spring:beans>
+    <munit:test name="poc4-test-suite-poc4FlowTest" description="Test" >
+        <mock:when messageProcessor=".*:.*" doc:name="Mock">
+            <mock:with-attributes>
+                <mock:with-attribute name="doc:name" whereValue="#['JMS']"/>
+            </mock:with-attributes>
+            <mock:then-return payload="1"/>
+        </mock:when>
+        <munit:set payload="#[]" doc:name="Set Message">
+            <munit:inbound-properties>
+                <munit:inbound-property key="http.query.params" value="#[['id': 16]]" encoding="UTF-8" mimeType="application/json"/>
+            </munit:inbound-properties>
+        </munit:set>
+        <flow-ref name="poc4Flow" doc:name="Flow-ref to poc4Flow"/>
+        <munit:assert-true message="Failed" condition="#[payload == 1]" doc:name="Assert True"/>
+    </munit:test>
+    <munit:test name="poc4-test-suite-poc4FlowTest1" description="Test" >
+        <munit:set payload="#[]" doc:name="Set Message">
+            <munit:inbound-properties>
+                <munit:inbound-property key="http.query.params" value="#[['id': 0]]" encoding="UTF-8" mimeType="application/json"/>
+            </munit:inbound-properties>
+        </munit:set>
+        <flow-ref name="poc4Flow" doc:name="Flow-ref to poc4Flow"/>
+        <munit:assert-true condition="#[payload == 'No Record Found!']" doc:name="Assert True"/>
+    </munit:test>
+    <munit:test name="poc4-test-suite-poc4FlowTest2" description="Test" >
+        <mock:when messageProcessor=".*:.*" doc:name="Mock">
+            <mock:with-attributes>
+                <mock:with-attribute name="doc:name" whereValue="#['Database']"/>
+            </mock:with-attributes>
+            <mock:then-return payload="[{Investment_Funds=10000, LastName=Padhye, LIC=10000, Basic_Salary=314225, Designation=ASE, FirstName=Prasanjit, PF=30000, EmpId=16, Salary=1350000}]" encoding="UTF-8" mimeType="application/java"/>
+        </mock:when>
+        <munit:set payload="#[]" doc:name="Set Message">
+            <munit:inbound-properties>
+                <munit:inbound-property key="http.query.params" value="#[['id': 16]]" encoding="UTF-8" mimeType="application/json"/>
+            </munit:inbound-properties>
+        </munit:set>
+        <flow-ref name="poc4Flow" doc:name="Flow-ref to poc4Flow"/>
+        <munit:assert-true condition="#[payload == 'Dataweave Exception!']" doc:name="Assert True"/>
+    </munit:test>
+    <munit:test name="poc4-test-suite-poc4Flow1Test" description="Test">
+        <mock:when messageProcessor=".*:.*" doc:name="Mock">
+            <mock:with-attributes>
+                <mock:with-attribute name="doc:name" whereValue="#['File']"/>
+            </mock:with-attributes>
+        </mock:when>
+        <set-variable variableName="outputPattern" value="msg.txt" doc:name="outputPattern"/>
+        <flow-ref name="poc4Flow1" doc:name="Flow-ref to poc4Flow1"/>
+        <munit:assert-true condition="#[payload == 'msg.txt Created Successfully!']" doc:name="Assert True"/>
+    </munit:test>
+</mule>

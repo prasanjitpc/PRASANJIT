@@ -1,0 +1,9 @@
+{
+  "EmpId": 16,
+  "FirstName": "Prasanjit",
+  "LastName": "Padhye",
+  "Designation": "ASE",
+  "Salary": 1350000,
+  "Total Investment": 90000,
+  "Total tax": 178000.0
+}

@@ -1,0 +1,98 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core" xmlns:tracking="http://www.mulesoft.org/schema/mule/ee/tracking" xmlns:json="http://www.mulesoft.org/schema/mule/json" xmlns:file="http://www.mulesoft.org/schema/mule/file"
+	xmlns:dw="http://www.mulesoft.org/schema/mule/ee/dw" xmlns:db="http://www.mulesoft.org/schema/mule/db"
+	xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns:jms="http://www.mulesoft.org/schema/mule/jms"
+	xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+	xmlns:spring="http://www.springframework.org/schema/beans" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans-current.xsd
+http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/db http://www.mulesoft.org/schema/mule/db/current/mule-db.xsd
+http://www.mulesoft.org/schema/mule/ee/dw http://www.mulesoft.org/schema/mule/ee/dw/current/dw.xsd
+http://www.mulesoft.org/schema/mule/jms http://www.mulesoft.org/schema/mule/jms/current/mule-jms.xsd
+http://www.mulesoft.org/schema/mule/file http://www.mulesoft.org/schema/mule/file/current/mule-file.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+http://www.mulesoft.org/schema/mule/json http://www.mulesoft.org/schema/mule/json/current/mule-json.xsd
+http://www.mulesoft.org/schema/mule/ee/tracking http://www.mulesoft.org/schema/mule/ee/tracking/current/mule-tracking-ee.xsd
+http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd">
+	<db:mysql-config name="MySQL_Configuration" host="localhost"
+		port="3307" user="root" password="root" database="POC4" doc:name="MySQL Configuration" />
+	<file:connector name="File" autoDelete="false"
+		streaming="false" validateConnections="true" doc:name="File" />
+	<http:listener-config name="HTTP_Listener_Configuration"
+		host="0.0.0.0" port="8081" doc:name="HTTP Listener Configuration" />
+    <jms:activemq-connector name="Active_MQ" username="admin" password="admin" brokerURL="tcp://localhost:61616" validateConnections="true" doc:name="Active MQ"/>
+	<flow name="poc4Flow">
+		<http:listener config-ref="HTTP_Listener_Configuration"
+			path="/empid" allowedMethods="GET" doc:name="HTTP" />
+<!-- 		<set-variable variableName="empid"
+			value="#[message.inboundProperties.'http.query.params'.id]" doc:name="empid" /> -->
+		<db:select config-ref="MySQL_Configuration" doc:name="Database">
+            <db:parameterized-query><![CDATA[select employee.EmpId,employee.FirstName,employee.LastName,employee.Designation,financialinfo.Salary,financialinfo.Basic_Salary,financialinfo.Investment_Funds,financialinfo.PF,financialinfo.LIC from employee INNER JOIN financialinfo ON employee.EmpId=financialinfo.EmpId where employee.EmpId = #[message.inboundProperties.'http.query.params'.id]]]></db:parameterized-query>
+		</db:select>
+        <logger message="#[payload]" level="INFO" doc:name="Logger"/>
+        <choice doc:name="Choice">
+            <when expression="#[payload != null &amp;&amp; payload.size()!=0]">
+                <dw:transform-message doc:name="Transform Message">
+                    <dw:input-payload doc:sample="sample_data\list_map_2.dwl"/>
+                    <dw:set-payload><![CDATA[%dw 1.0
+%output application/json
+%var hra =  40000 as :number when (0.4 * (payload[0].Basic_Salary) > 40000 as :number) otherwise 0.4 * (payload[0].Basic_Salary) as :number
+%var inv = payload[0].Investment_Funds + payload[0].PF +  hra + payload[0].LIC
+%var tti = payload[0].Salary - inv
+---
+{
+	EmpId:payload[0].EmpId,
+	FirstName:payload[0].FirstName,
+	LastName:payload[0].LastName,
+	Designation:payload[0].Designation,
+	Salary:payload[0].Salary,
+	"Total Investment":inv,
+	"Total tax":0 as :number when ( tti <= 500000 as :number) otherwise
+				(0.2 * (tti - 500000 as :number)) when 	(tti > 500000 as :number and tti <= 1000000 as :number) otherwise
+				(100000 + 0.3 * (tti - 1000000 as :number))
+}]]></dw:set-payload>
+                </dw:transform-message>
+                <byte-array-to-string-transformer doc:name="Byte Array to String"/>
+                <logger message="#[payload]" level="INFO" doc:name="Logger"/>
+                <jms:outbound-endpoint queue="JM" connector-ref="Active_MQ" doc:name="JMS">
+                    <jms:transaction action="NONE" timeout="1"/>
+                </jms:outbound-endpoint>
+            </when>
+            <otherwise>
+                <set-payload value="No Record Found!" doc:name="Set Payload"/>
+                <logger message="#[payload]" level="INFO" doc:name="Logger"/>
+            </otherwise>
+        </choice>
+        <exception-strategy ref="ChoiceExceptionStrategy" doc:name="Reference Exception Strategy"/>
+	</flow>
+    
+	<flow name="poc4Flow1">
+        <jms:inbound-endpoint queue="JM" connector-ref="Active_MQ" doc:name="JMS"/>
+		<file:outbound-endpoint path="src/main/resources/"
+			connector-ref="File" responseTimeout="10000" doc:name="File" outputPattern="msg.txt"/>
+        <set-payload value="#[flowVars.outputPattern] Created Successfully!" doc:name="Set Payload"/>
+		<logger message="#[payload]" level="INFO"
+			doc:name="Logger" />
+	</flow>
+	<choice-exception-strategy name="ChoiceExceptionStrategy">
+        <catch-exception-strategy when="#[exception.causeMatches('WeaveExecutionException')]" doc:name="Catch Exception Strategy">
+            <set-payload value="Dataweave Exception!" doc:name="Set Payload"/>
+            <logger message="#[payload]" level="INFO" doc:name="Logger"/>
+        </catch-exception-strategy>
+        <catch-exception-strategy when="#[exception.causeMatches('MySQL')]" doc:name="Catch Exception Strategy">
+            <set-payload value="Database Exception!" doc:name="Set Payload"/>
+            <logger message="#[payload]" level="INFO" doc:name="Logger"/>
+        </catch-exception-strategy>
+        <catch-exception-strategy doc:name="Catch Exception Strategy" when="#[exception.causeMatches('javax.jms.JMSException') || exception.causeMatches('ConnectException') || exception.causeMatches('MessagingException')]">
+            <set-payload value="Queue Exception!" doc:name="Set Payload"/>
+            <logger message="#[payload]" level="INFO" doc:name="Logger"/>
+        </catch-exception-strategy>
+        <catch-exception-strategy when="#[exception.causeMatches('Exception')]" doc:name="Catch Exception Strategy">
+            <set-payload value="Exception!" doc:name="Set Payload"/>
+            <logger message="#[payload]Exception!" level="INFO" doc:name="Logger"/>
+        </catch-exception-strategy>
+        
+    </choice-exception-strategy>
+	
+</mule>
